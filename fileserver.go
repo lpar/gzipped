@@ -10,6 +10,14 @@ import (
 	"github.com/golang/gddo/httputil/header"
 )
 
+const (
+	gzipEncoding  = "gzip"
+	gzipExtension = ".gz"
+
+	brotliEncoding  = "br"
+	brotliExtension = ".br"
+)
+
 type fileHandler struct {
 	root http.FileSystem
 }
@@ -34,12 +42,12 @@ func FileServer(root http.FileSystem) http.Handler {
 	return &fileHandler{root}
 }
 
-func gzipAcceptable(r *http.Request) bool {
+func acceptable(r *http.Request, encoding string) bool {
 	for _, aspec := range header.ParseAccept(r.Header, "Accept-Encoding") {
-		if aspec.Value == "gzip" && aspec.Q == 0.0 {
+		if aspec.Value == encoding && aspec.Q == 0.0 {
 			return false
 		}
-		if (aspec.Value == "gzip" || aspec.Value == "*") && aspec.Q > 0.0 {
+		if (aspec.Value == encoding || aspec.Value == "*") && aspec.Q > 0.0 {
 			return true
 		}
 	}
@@ -81,25 +89,33 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var file http.File
 	var err error
 	var info os.FileInfo
-	var gzip bool
-	if gzipAcceptable(r) {
-		gzpath := fpath + ".gz"
-		file, info, err = f.openAndStat(gzpath)
+
+	foundAcceptable := false
+
+	if acceptable(r, brotliEncoding) {
+		file, info, err = f.openAndStat(fpath + brotliExtension)
 		if err == nil {
-			gzip = true
+			foundAcceptable = true
+			w.Header().Set("Content-Encoding", brotliEncoding)
+		}
+
+	}
+
+	if !foundAcceptable && acceptable(r, gzipEncoding) {
+		file, info, err = f.openAndStat(fpath + gzipExtension)
+		if err == nil {
+			foundAcceptable = true
+			w.Header().Set("Content-Encoding", gzipEncoding)
 		}
 	}
 	// If we didn't manage to open a compressed version, try for uncompressed
-	if !gzip {
+	if !foundAcceptable {
 		file, info, err = f.openAndStat(fpath)
 	}
 	if err != nil {
 		// Doesn't exist compressed or uncompressed
 		http.NotFound(w, r)
 		return
-	}
-	if gzip {
-		w.Header().Set("Content-Encoding", "gzip")
 	}
 	defer file.Close()
 	http.ServeContent(w, r, fpath, info.ModTime(), file)
