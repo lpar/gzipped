@@ -38,7 +38,7 @@ Using [httprouter](https://github.com/julienschmidt/httprouter)?
 
 For any given request at `/path/filename.ext`, if:
 
-  1. There exists a file named `/path/filename.ext.(gz|bz)` (starting from the 
+  1. There exists a file named `/path/filename.ext.(gz|br)` (starting from the 
      appropriate base directory), and
   2. the client will accept content compressed via the appropriate algorithm, and
   3. the file can be opened,
