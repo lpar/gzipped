@@ -28,14 +28,14 @@ func TestGzipAcceptable(t *testing.T) {
 	req.Header = make(http.Header)
 	for _, ac := range trueHeaders {
 		req.Header.Set("Accept-Encoding", ac)
-		if !gzipAcceptable(&req) {
-			t.Errorf("gzipAcceptable(%s) false, want true", ac)
+		if !acceptable(&req, gzipEncoding) {
+			t.Errorf("acceptable(%s, gzip) false, want true", ac)
 		}
 	}
 	for _, ac := range falseHeaders {
 		req.Header.Set("Accept-Encoding", ac)
-		if gzipAcceptable(&req) {
-			t.Errorf("gzipAcceptable(%s) true, want false", ac)
+		if acceptable(&req, gzipEncoding) {
+			t.Errorf("acceptable(%s, gzip) true, want false", ac)
 		}
 	}
 }

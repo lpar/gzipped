@@ -1,11 +1,11 @@
 # gzipped.FileServer
 
-Drop-in replacement for golang http.FileServer which supports gzipped static 
-content.
+Drop-in replacement for golang http.FileServer which supports static content
+compressed with gzip (including zopfli) or brotli.
 
 This allows major bandwidth savings for CSS, JavaScript libraries, fonts, and
 other static compressible web content. It also means you can compress the
-content with zopfli without significant runtime penalty.
+content without significant runtime penalty.
 
 ## Example
 
@@ -38,9 +38,9 @@ Using [httprouter](https://github.com/julienschmidt/httprouter)?
 
 For any given request at `/path/filename.ext`, if:
 
-  1. the client will accept gzipped content, and
-  2. there exists a file named `/path/filename.ext.gz` (starting from the 
+  1. There exists a file named `/path/filename.ext.(gz|bz)` (starting from the 
      appropriate base directory), and
+  2. the client will accept content compressed via the appropriate algorithm, and
   3. the file can be opened,
 
 then the compressed file will be served as `/path/filename.ext`, with a
@@ -67,7 +67,7 @@ implementation.)
 
  * You might consider precompressing your CSS with [minify](https://github.com/tdewolff/minify). 
 
- * If you want to get the best possible compression, use [zopfli](https://github.com/google/zopfli).
+ * If you want to get the best possible compression for clients which don't support brotli, use [zopfli](https://github.com/google/zopfli).
 
  * To compress your dynamically-generated HTML pages on the fly, I suggest [gziphandler](https://github.com/NYTimes/gziphandler).
 
