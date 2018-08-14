@@ -1,3 +1,5 @@
+[![GoDoc](https://godoc.org/github.com/lpar/gzipped?status.svg)](https://godoc.org/github.com/lpar/gzipped)
+
 # gzipped.FileServer
 
 Drop-in replacement for golang http.FileServer which supports static content
