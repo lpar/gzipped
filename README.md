@@ -61,9 +61,25 @@ tricky details are handled by that method.
 It is up to you to ensure that your compressed and uncompressed resources are
 kept in sync.
 
-Directory browsing isn't supported. (You probably don't want it on your
-application anyway, and if you do then you probably don't want Go's default
-implementation.)
+Directory browsing isn't supported. That includes remapping URLs ending in `/` to `index.html`, 
+`index.htm`, `Welcome.html` or whatever -- if you want URLs remapped that way,
+I suggest having your router do it, or using middleware, so that you have control
+over the behavior. For example:
+
+```go
+func withIndices(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") {
+			r.URL.Path = r.URL.Path + "index.html"
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+// ...
+
+fs := withIndices(gzipped.FileServer(http.Dir("/var/www")))
+```
 
 ## Related
 
