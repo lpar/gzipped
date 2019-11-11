@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"strconv"
 	"testing"
 )
@@ -86,13 +87,8 @@ func testGet(t *testing.T, withGzip bool, expectedBody string) {
 		t.Errorf("GET returned wrong content type %s", h["Content-Type"])
 	}
 	clh := h["Content-Length"]
-	// There should be no content-length on gzipped content.
-	// See https://github.com/golang/go/issues/9987
-	if len(clh) > 0 && withGzip {
-		t.Errorf("Response had both Transfer-Encoding and Content-Length")
-	}
-	// Otherwise, check the content-length is correct.
-	if len(clh) > 0 && !withGzip {
+	// Check the content-length is correct.
+	if len(clh) > 0 {
 		bytes, err := strconv.Atoi(clh[0])
 		if err != nil {
 			t.Errorf("Invalid Content-Length on response: '%s'", clh[0])
@@ -175,4 +171,19 @@ func TestGet(t *testing.T) {
 
 func TestGzipGet(t *testing.T) {
 	testGet(t, true, "abcdefghijklmnopqrstuvwxyz\n")
+}
+
+func TestConstHeaders(t *testing.T) {
+	for _, header := range []string{
+		acceptEncodingHeader,
+		contentEncodingHeader,
+		contentLengthHeader,
+		rangeHeader,
+		varyHeader,
+	} {
+		canonical := textproto.CanonicalMIMEHeaderKey(header)
+		if header != canonical {
+			t.Errorf("%s != %s", header, canonical)
+		}
+	}
 }
