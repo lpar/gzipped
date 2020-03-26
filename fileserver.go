@@ -11,46 +11,6 @@ import (
 	"github.com/kevinpollet/nego"
 )
 
-// Encoding represents an Accept-Encoding. All of these fields are pre-populated
-// in the supportedEncodings variable, except the clientPreference which is updated
-// (by copying a value from supportedEncodings) when examining client headers.
-type encoding struct {
-	name             string  // the encoding name
-	extension        string  // the file extension (including a leading dot)
-	clientPreference float64 // the client's preference
-	serverPreference int     // the server's preference
-}
-
-// Helper type to sort encodings, using clientPreference first, and then
-// serverPreference as a tie breaker. This sorts in *DESCENDING* order, rather
-// than the usual ascending order.
-type encodingByPreference []encoding
-
-// Implement the sort.Interface interface
-func (e encodingByPreference) Len() int { return len(e) }
-func (e encodingByPreference) Less(i, j int) bool {
-	if e[i].clientPreference == e[j].clientPreference {
-		return e[i].serverPreference > e[j].serverPreference
-	}
-	return e[i].clientPreference > e[j].clientPreference
-}
-func (e encodingByPreference) Swap(i, j int) { e[i], e[j] = e[j], e[i] }
-
-// Supported encodings. Higher server preference means the encoding will be when
-// the client doesn't have an explicit preference.
-var supportedEncodings = [...]encoding{
-	{
-		name:             "gzip",
-		extension:        ".gz",
-		serverPreference: 1,
-	},
-	{
-		name:             "br",
-		extension:        ".br",
-		serverPreference: 2,
-	},
-}
-
 // List of encodings we would prefer to use, in order of preference, best first.
 var preferredEncodings = []string{"br", "gzip", "identity"}
 

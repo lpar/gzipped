@@ -8,15 +8,14 @@ import (
 	"strings"
 )
 
-type fileSystem struct {
-	http.FileSystem
-}
-
+// FileSystem is a wrapper around the http.FileSystem interface, adding a method to let us check for the existence
+// of files without (attempting to) open them.
 type FileSystem interface {
 	http.FileSystem
 	Exists(string) bool
 }
 
+// Dir is a replacement for the http.Dir type, and implements FileSystem.
 type Dir string
 
 // Exists tests whether a file with the specified name exists, resolved relative to the base directory.

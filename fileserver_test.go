@@ -13,16 +13,6 @@ import (
 	"github.com/kevinpollet/nego"
 )
 
-// foundEncoding checks if a given encoding was seen in the acceptEncodings list
-func foundEncoding(acceptEncodings []encoding, target string) bool {
-	for _, seen := range acceptEncodings {
-		if seen.name == target {
-			return true
-		}
-	}
-	return false
-}
-
 // Test that the server respects client preferences
 func TestPreference(t *testing.T) {
 	req := http.Request{Header: http.Header{}}
@@ -63,13 +53,13 @@ func testGet(t *testing.T, withGzip bool, expectedBody string) {
 	clh := h["Content-Length"]
 	// Check the content-length is correct.
 	if len(clh) > 0 {
-		bytes, err := strconv.Atoi(clh[0])
+		byts, err := strconv.Atoi(clh[0])
 		if err != nil {
 			t.Errorf("Invalid Content-Length on response: '%s'", clh[0])
 		}
 		n := rr.Body.Len()
-		if n != bytes {
-			t.Errorf("GET expected %d bytes, got %d", bytes, n)
+		if n != byts {
+			t.Errorf("GET expected %d byts, got %d", byts, n)
 		}
 	}
 	var body string
