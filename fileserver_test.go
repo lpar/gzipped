@@ -9,6 +9,8 @@ import (
 	"net/textproto"
 	"strconv"
 	"testing"
+
+	"github.com/kevinpollet/nego"
 )
 
 // foundEncoding checks if a given encoding was seen in the acceptEncodings list
@@ -19,29 +21,6 @@ func foundEncoding(acceptEncodings []encoding, target string) bool {
 		}
 	}
 	return false
-}
-
-// Test various cases where gzip is or is not acceptable
-func TestGzipAcceptable(t *testing.T) {
-	req := http.Request{Header: http.Header{}}
-	for _, info := range []struct {
-		hdr    string // the Accept-Encoding header
-		expect bool   // whether we expect gzip to be acceptable
-	}{
-		{"gzip", true},
-		{"*", true},
-		{"compress,gzip;q=0.1", true},
-		{"compress, * ;q=1", true},
-		{"deflate ;q=0.3, gzip ;q=0.7, x-foo", true},
-		{"gzip;q=0,*", false},
-		{"deflate; gzip ;q=0 , x-foo,*", false},
-	} {
-		req.Header.Set("Accept-Encoding", info.hdr)
-		accepted := foundEncoding(acceptable(&req), "gzip")
-		if accepted != info.expect {
-			t.Errorf("expected gzip accept to be %t, instead got %t, for header %s", info.expect, accepted, info.hdr)
-		}
-	}
 }
 
 // Test that the server respects client preferences
@@ -58,20 +37,15 @@ func TestPreference(t *testing.T) {
 		{"gzip, deflate, br;q=0.5", "gzip"},
 	} {
 		req.Header.Set("Accept-Encoding", info.hdr)
-		acceptEncodings := acceptable(&req)
-		if len(acceptEncodings) == 0 {
-			t.Errorf("server failed to find an accept encoding")
-			continue
-		}
-		best := acceptEncodings[0].name
-		if best != info.expect {
-			t.Errorf("server chose %s but we expected %s for header %s", best, info.expect, info.hdr)
+		negenc := nego.NegotiateContentEncoding(&req, preferredEncodings...)
+		if negenc != info.expect {
+			t.Errorf("server chose %s but we expected %s for header %s", negenc, info.expect, info.hdr)
 		}
 	}
 }
 
 func testGet(t *testing.T, withGzip bool, expectedBody string) {
-	fs := FileServer(http.Dir("./testdata/"))
+	fs := FileServer(Dir("./testdata/"))
 	rr := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/file.txt", nil)
 	var encoding string
@@ -115,7 +89,7 @@ func testGet(t *testing.T, withGzip bool, expectedBody string) {
 		body = rr.Body.String()
 	}
 	if len(body) != 27 {
-		t.Errorf("GET %s returned wrong decoded body length '%d', expected 27",
+		t.Errorf("GET%s returned wrong decoded body length '%d', expected 27",
 			encoding, len(body))
 	}
 	if body != expectedBody {
@@ -124,7 +98,7 @@ func testGet(t *testing.T, withGzip bool, expectedBody string) {
 }
 
 func TestOpenStat(t *testing.T) {
-	fh := &fileHandler{http.Dir(".")}
+	fh := &fileHandler{Dir(".")}
 	_, _, err := fh.openAndStat(".")
 	if err == nil {
 		t.Errorf("openAndStat directory succeeded, should have failed")
@@ -136,7 +110,7 @@ func TestOpenStat(t *testing.T) {
 }
 
 func TestNoBrowse(t *testing.T) {
-	fs := FileServer(http.Dir("./testdata/"))
+	fs := FileServer(Dir("./testdata/"))
 	rr := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/", nil)
 	fs.ServeHTTP(rr, req)
@@ -146,7 +120,7 @@ func TestNoBrowse(t *testing.T) {
 }
 
 func TestLeadingSlash(t *testing.T) {
-	fs := FileServer(http.Dir("./testdata/"))
+	fs := FileServer(Dir("./testdata/"))
 	rr := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "file.txt", nil)
 	fs.ServeHTTP(rr, req)
@@ -156,7 +130,7 @@ func TestLeadingSlash(t *testing.T) {
 }
 
 func Test404(t *testing.T) {
-	fs := FileServer(http.Dir("./testdata/"))
+	fs := FileServer(Dir("./testdata/"))
 	rr := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/nonexistent.txt", nil)
 	fs.ServeHTTP(rr, req)

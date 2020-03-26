@@ -24,7 +24,7 @@ Suppose `/var/www/assets/css` contains your style sheets, and you want to make t
     
     func main() {
     	log.Fatal(http.ListenAndServe(":8080", http.StripPrefix("/css",
-        gzipped.FileServer(http.Dir("/var/www/assets/css")))))
+        gzipped.FileServer(gzipped.Dir("/var/www/assets/css")))))
     }
     // curl localhost:8080/css/styles.css
 
@@ -33,8 +33,18 @@ Using [httprouter](https://github.com/julienschmidt/httprouter)?
 
     router := httprouter.New()
     router.Handler("GET", "/css/*filepath", 
-      gzipped.FileServer(http.Dir("/var/www/assets/css"))))
+      gzipped.FileServer(gzipped.Dir("/var/www/assets/css"))))
     log.Fatal(http.ListenAndServe(":8080", router)
+
+## Change history
+
+In version 2.0, we require use of `gzipped.Dir`, a drop-in replacement for `http.Dir`. Our `gzipped.Dir` has the
+additional feature of letting us check for the existence of files without opening them. This means we can scan
+to see what encodings are available, then negotiate that list against the client's preferences, and then only (attempt
+to) open and serve the correct file.
+
+This change means we can let `github.com/kevinpollet/nego` handle the content negotiation, and remove the dependency
+on gddo (godoc), which was pulling in 48 dependencies (see [#6](https://github.com/lpar/gzipped/issues/6)).
 
 ## Detail
 

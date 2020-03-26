@@ -5,11 +5,10 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/golang/gddo/httputil/header"
+	"github.com/kevinpollet/nego"
 )
 
 // Encoding represents an Accept-Encoding. All of these fields are pre-populated
@@ -52,8 +51,30 @@ var supportedEncodings = [...]encoding{
 	},
 }
 
+// List of encodings we would prefer to use, in order of preference, best first.
+var preferredEncodings = []string{"br", "gzip", "identity"}
+
+// File extension to use for different encodings.
+func extensionForEncoding(encname string) string {
+	switch encname {
+	case "gzip":
+		return ".gz"
+	case "br":
+		return ".br"
+	case "identity":
+		return ""
+	}
+	return ""
+}
+
+// Function to negotiate the best content encoding
+// Pulled out here so we have the option of overriding nego's behavior and so we can test
+func negotiate(r *http.Request, available []string) string {
+	return nego.NegotiateContentEncoding(r, available...)
+}
+
 type fileHandler struct {
-	root http.FileSystem
+	root FileSystem
 }
 
 // FileServer is a drop-in replacement for Go's standard http.FileServer
@@ -72,7 +93,7 @@ type fileHandler struct {
 // Compressed or not, requests are fulfilled using http.ServeContent, and
 // details like accept ranges and content-type sniffing are handled by that
 // method.
-func FileServer(root http.FileSystem) http.Handler {
+func FileServer(root FileSystem) http.Handler {
 	return &fileHandler{root}
 }
 
@@ -94,56 +115,6 @@ func (f *fileHandler) openAndStat(path string) (http.File, os.FileInfo, error) {
 	return file, info, nil
 }
 
-// Build a []encoding based on the Accept-Encoding header supplied by the
-// client. The returned list will be sorted from most-preferred to
-// least-preferred.
-func acceptable(r *http.Request) []encoding {
-	// list of acceptable encodings, as provided by the client
-	acceptEncodings := make([]encoding, 0, len(supportedEncodings))
-
-	// the quality of the * encoding; this will be -1 if not sent by client
-	starQuality := -1.
-
-	// encodings we've already seen (used to handle duplicates and *)
-	seenEncodings := make(map[string]interface{})
-
-	// match the client accept encodings against the ones we support
-	for _, aspec := range header.ParseAccept(r.Header, acceptEncodingHeader) {
-		if _, alreadySeen := seenEncodings[aspec.Value]; alreadySeen {
-			continue
-		}
-		seenEncodings[aspec.Value] = nil
-		if aspec.Value == "*" {
-			starQuality = aspec.Q
-			continue
-		}
-		for _, known := range supportedEncodings {
-			if aspec.Value == known.name && aspec.Q != 0 {
-				enc := known
-				enc.clientPreference = aspec.Q
-				acceptEncodings = append(acceptEncodings, enc)
-				break
-			}
-		}
-	}
-
-	// If the client sent Accept: *, add all our extra known encodings. Use
-	// the quality of * as the client quality for the encoding.
-	if starQuality != -1. {
-		for _, known := range supportedEncodings {
-			if _, seen := seenEncodings[known.name]; !seen {
-				enc := known
-				enc.clientPreference = starQuality
-				acceptEncodings = append(acceptEncodings, enc)
-			}
-		}
-	}
-
-	// sort the encoding based on client/server preference
-	sort.Sort(encodingByPreference(acceptEncodings))
-	return acceptEncodings
-}
-
 const (
 	acceptEncodingHeader  = "Accept-Encoding"
 	contentEncodingHeader = "Content-Encoding"
@@ -156,23 +127,46 @@ const (
 // files actually exist on the filesystem. If no file was found that can satisfy
 // the request, the error field will be non-nil.
 func (f *fileHandler) findBestFile(w http.ResponseWriter, r *http.Request, fpath string) (http.File, os.FileInfo, error) {
-	// find the best matching file
-	for _, enc := range acceptable(r) {
-		if file, info, err := f.openAndStat(fpath + enc.extension); err == nil {
-			wHeader := w.Header()
-			wHeader[contentEncodingHeader] = []string{enc.name}
-			wHeader.Add(varyHeader, acceptEncodingHeader)
-
-			if len(r.Header[rangeHeader]) == 0 {
-				// If not a range request then we can easily set the content length which the
-				// Go standard library does not do if "Content-Encoding" is set.
-				wHeader[contentLengthHeader] = []string{strconv.FormatInt(info.Size(), 10)}
-			}
-			return file, info, nil
+	ae := r.Header.Get(acceptEncodingHeader)
+	if ae == "" {
+		return f.openAndStat(fpath)
+	}
+	// Got an accept header? See what possible encodings we can send by looking for files
+	var available []string
+	for _, posenc := range preferredEncodings {
+		ext := extensionForEncoding(posenc)
+		fname := fpath + ext
+		if f.root.Exists(fname) {
+			available = append(available, posenc)
+			fmt.Printf("%s (%s) available\n", fname, posenc)
+		} else {
+			fmt.Printf("%s (%s) not found\n", fname, posenc)
 		}
 	}
+	if len(available) == 0 {
+		return f.openAndStat(fpath)
+	}
+	// Carry out standard HTTP negotiation
+	negenc := negotiate(r, available)
+	if negenc == "" {
+		// If we fail to negotiate anything, again try the base file
+		return f.openAndStat(fpath)
+	}
+	ext := extensionForEncoding(negenc)
+	if file, info, err := f.openAndStat(fpath + ext); err == nil {
+		wHeader := w.Header()
+		wHeader[contentEncodingHeader] = []string{negenc}
+		wHeader.Add(varyHeader, acceptEncodingHeader)
 
-	// if nothing found, try the base file with no content-encoding
+		if len(r.Header[rangeHeader]) == 0 {
+			// If not a range request then we can easily set the content length which the
+			// Go standard library does not do if "Content-Encoding" is set.
+			wHeader[contentLengthHeader] = []string{strconv.FormatInt(info.Size(), 10)}
+		}
+		return file, info, nil
+	}
+
+	// If all else failed, fall back to base file once again
 	return f.openAndStat(fpath)
 }
 
