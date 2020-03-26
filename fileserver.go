@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/golang/gddo/httputil/header"
@@ -107,7 +108,7 @@ func acceptable(r *http.Request) []encoding {
 	seenEncodings := make(map[string]interface{})
 
 	// match the client accept encodings against the ones we support
-	for _, aspec := range header.ParseAccept(r.Header, "Accept-Encoding") {
+	for _, aspec := range header.ParseAccept(r.Header, acceptEncodingHeader) {
 		if _, alreadySeen := seenEncodings[aspec.Value]; alreadySeen {
 			continue
 		}
@@ -143,6 +144,14 @@ func acceptable(r *http.Request) []encoding {
 	return acceptEncodings
 }
 
+const (
+	acceptEncodingHeader  = "Accept-Encoding"
+	contentEncodingHeader = "Content-Encoding"
+	contentLengthHeader   = "Content-Length"
+	rangeHeader           = "Range"
+	varyHeader            = "Vary"
+)
+
 // Find the best file to serve based on the client's Accept-Encoding, and which
 // files actually exist on the filesystem. If no file was found that can satisfy
 // the request, the error field will be non-nil.
@@ -150,7 +159,15 @@ func (f *fileHandler) findBestFile(w http.ResponseWriter, r *http.Request, fpath
 	// find the best matching file
 	for _, enc := range acceptable(r) {
 		if file, info, err := f.openAndStat(fpath + enc.extension); err == nil {
-			w.Header().Set("Content-Encoding", enc.name)
+			wHeader := w.Header()
+			wHeader[contentEncodingHeader] = []string{enc.name}
+			wHeader.Add(varyHeader, acceptEncodingHeader)
+
+			if len(r.Header[rangeHeader]) == 0 {
+				// If not a range request then we can easily set the content length which the
+				// Go standard library does not do if "Content-Encoding" is set.
+				wHeader[contentLengthHeader] = []string{strconv.FormatInt(info.Size(), 10)}
+			}
 			return file, info, nil
 		}
 	}
