@@ -72,8 +72,8 @@ func withIndexHTML(h http.Handler) http.Handler {
 		if strings.HasSuffix(r.URL.Path, "/") {
 			newpath := path.Join(r.URL.Path, "index.html")
 			r.URL.Path = newpath
-			h.ServeHTTP(w, r)
 		}
+		h.ServeHTTP(w, r)
 	})
 }
 // ...
