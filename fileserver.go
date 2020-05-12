@@ -105,8 +105,8 @@ func (f *fileHandler) findBestFile(w http.ResponseWriter, r *http.Request, fpath
 	}
 	// Carry out standard HTTP negotiation
 	negenc := negotiate(r, available)
-	if negenc == "" {
-		// If we fail to negotiate anything, again try the base file
+	if negenc == "" || negenc == "identity" {
+		// If we fail to negotiate anything or if we negotiated the identity encoding, again try the base file
 		return f.openAndStat(fpath)
 	}
 	ext := extensionForEncoding(negenc)
