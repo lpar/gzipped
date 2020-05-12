@@ -98,9 +98,6 @@ func (f *fileHandler) findBestFile(w http.ResponseWriter, r *http.Request, fpath
 		fname := fpath + ext
 		if f.root.Exists(fname) {
 			available = append(available, posenc)
-			fmt.Printf("%s (%s) available\n", fname, posenc)
-		} else {
-			fmt.Printf("%s (%s) not found\n", fname, posenc)
 		}
 	}
 	if len(available) == 0 {
