@@ -19,7 +19,7 @@ Suppose `/var/www/assets/css` contains your style sheets, and you want to make t
     	"log"
     	"net/http"
     
-    	"github.com/lpar/gzipped"
+    	"github.com/lpar/gzipped/v2"
     )
     
     func main() {
