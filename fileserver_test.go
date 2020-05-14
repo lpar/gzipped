@@ -25,7 +25,7 @@ func TestPreference(t *testing.T) {
 		{"*", "br"},
 		{"gzip, deflate, br", "br"},
 		{"gzip, deflate, br;q=0.5", "gzip"},
-	} {
+	}{
 		req.Header.Set("Accept-Encoding", info.hdr)
 		negenc := nego.NegotiateContentEncoding(&req, preferredEncodings...)
 		if negenc != info.expect {
@@ -34,24 +34,18 @@ func TestPreference(t *testing.T) {
 	}
 }
 
-func testGet(t *testing.T, withGzip bool, expectedBody string) {
+func testGet(t *testing.T, acceptGzip bool, urlPath string, expectedBody string) {
 	fs := FileServer(Dir("./testdata/"))
 	rr := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/file.txt", nil)
-	var encoding string
-	if withGzip {
-		encoding = " with gzip"
+	req, _ := http.NewRequest("GET", urlPath, nil)
+	if acceptGzip {
 		req.Header.Set("Accept-Encoding", "gzip,*")
-	} else {
-		encoding = ""
 	}
 	fs.ServeHTTP(rr, req)
 	h := rr.Header()
-	if h["Content-Type"][0] != "text/plain; charset=utf-8" {
-		t.Errorf("GET returned wrong content type %s", h["Content-Type"])
-	}
-	clh := h["Content-Length"]
+
 	// Check the content-length is correct.
+	clh := h["Content-Length"]
 	if len(clh) > 0 {
 		byts, err := strconv.Atoi(clh[0])
 		if err != nil {
@@ -62,28 +56,35 @@ func testGet(t *testing.T, withGzip bool, expectedBody string) {
 			t.Errorf("GET expected %d byts, got %d", byts, n)
 		}
 	}
+
+	// Check the body content is correct.
+	ce := h["Content-Encoding"]
 	var body string
-	if withGzip {
-		rdr, err := gzip.NewReader(bytes.NewReader(rr.Body.Bytes()))
-		if err != nil {
-			t.Errorf("Gunzip failed: %s", err)
-		} else {
-			bbody, err := ioutil.ReadAll(rdr)
+	if len(ce) > 0 {
+		if ce[0] == "gzip" {
+			rdr, err := gzip.NewReader(bytes.NewReader(rr.Body.Bytes()))
 			if err != nil {
-				t.Errorf("Gunzip read failed: %s", err)
+				t.Errorf("Gunzip failed: %s", err)
 			} else {
-				body = string(bbody)
+				bbody, err := ioutil.ReadAll(rdr)
+				if err != nil {
+					t.Errorf("Gunzip read failed: %s", err)
+				} else {
+					body = string(bbody)
+				}
 			}
+		} else {
+			t.Errorf("Invalid Content-Encoding in response: '%s'", ce[0])
 		}
 	} else {
 		body = rr.Body.String()
 	}
-	if len(body) != 27 {
-		t.Errorf("GET%s returned wrong decoded body length '%d', expected 27",
-			encoding, len(body))
+	if len(body) != len(expectedBody) {
+		t.Errorf("GET (acceptGzip=%v) returned wrong decoded body length %d, expected %d",
+			acceptGzip, len(body), len(expectedBody))
 	}
 	if body != expectedBody {
-		t.Errorf("GET%s returned wrong body '%s'", encoding, body)
+		t.Errorf("GET (acceptGzip=%v) returned wrong body '%s'", acceptGzip, body)
 	}
 }
 
@@ -130,11 +131,19 @@ func Test404(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	testGet(t, false, "zyxwvutsrqponmlkjihgfedcba\n")
+	testGet(t, false, "/file.txt", "zyxwvutsrqponmlkjihgfedcba\n")
 }
 
 func TestGzipGet(t *testing.T) {
-	testGet(t, true, "abcdefghijklmnopqrstuvwxyz\n")
+	testGet(t, true, "/file.txt", "abcdefghijklmnopqrstuvwxyz\n")
+}
+
+func TestGetIdentity(t *testing.T) {
+	testGet(t, false, "/file2.txt", "1234567890987654321\n")
+}
+
+func TestGzipGetIdentity(t *testing.T) {
+	testGet(t, true, "/file2.txt", "1234567890987654321\n")
 }
 
 func TestConstHeaders(t *testing.T) {
