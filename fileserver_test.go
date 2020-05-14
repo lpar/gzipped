@@ -25,7 +25,7 @@ func TestPreference(t *testing.T) {
 		{"*", "br"},
 		{"gzip, deflate, br", "br"},
 		{"gzip, deflate, br;q=0.5", "gzip"},
-	}{
+	} {
 		req.Header.Set("Accept-Encoding", info.hdr)
 		negenc := nego.NegotiateContentEncoding(&req, preferredEncodings...)
 		if negenc != info.expect {
