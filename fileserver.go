@@ -12,11 +12,13 @@ import (
 )
 
 // List of encodings we would prefer to use, in order of preference, best first.
-var preferredEncodings = []string{"br", "gzip", "identity"}
+var preferredEncodings = []string{"zstd", "br", "gzip", "identity"}
 
 // File extension to use for different encodings.
 func extensionForEncoding(encname string) string {
 	switch encname {
+	case "zstd":
+		return ".zst"
 	case "gzip":
 		return ".gz"
 	case "br":
