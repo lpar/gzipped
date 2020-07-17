@@ -79,7 +79,7 @@ over the behavior. For example, to add support for `index.html` files in directo
 ```go
 func withIndexHTML(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/") {
+		if strings.HasSuffix(r.URL.Path, "/") || len(r.URL.Path) == 0 {
 			newpath := path.Join(r.URL.Path, "index.html")
 			r.URL.Path = newpath
 		}
