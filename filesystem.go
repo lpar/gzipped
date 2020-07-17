@@ -29,10 +29,7 @@ func (d Dir) Exists(name string) bool {
 	}
 	fullName := filepath.Join(dir, filepath.FromSlash(path.Clean("/"+name)))
 	_, err := os.Stat(fullName)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // Open defers to http.Dir's Open so that gzipped.Dir implements http.FileSystem.
