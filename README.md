@@ -1,5 +1,9 @@
 [![GoDoc](https://godoc.org/github.com/lpar/gzipped?status.svg)](https://godoc.org/github.com/lpar/gzipped)
 
+[![Build Status](https://travis-ci.org/lpar/gzipped.svg?branch=trunk)](https://travis-ci.org/lpar/gzipped)
+
+[![codecov](https://codecov.io/gh/lpar/gzipped/branch/trunk/graph/badge.svg)](https://codecov.io/gh/lpar/gzipped)
+
 # gzipped.FileServer
 
 Drop-in replacement for golang http.FileServer which supports static content
@@ -65,14 +69,14 @@ Accept-Encoding headers properly, and has unit tests.
 ## Caveats
 
 All requests are passed to Go's standard `http.ServeContent` method for
-fulfilment. MIME type sniffing, accept ranges, content negotiation and other
-tricky details are handled by that method.
+fulfilment. MIME type mapping, accept ranges, content negotiation and other
+tricky details are handled by that method. If the extension of a file doesn't have a defined MIME type, `ServeContent`'s sniffing may result in it assigning a MIME type such as `application/x-gzip` rather than what you might hope. See issue #18 for more information.
 
 It is up to you to ensure that your compressed and uncompressed resources are
 kept in sync.
 
 Directory browsing isn't supported. That includes remapping URLs ending in `/` to `index.html`, 
-`index.htm`, `Welcome.html` or whatever -- if you want URLs remapped that way,
+`index.htm`, `Welcome.html` or whatever — if you want URLs remapped that way,
 I suggest having your router do it, or using middleware, so that you have control
 over the behavior. For example, to add support for `index.html` files in directories:
 
