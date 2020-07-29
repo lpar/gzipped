@@ -1,7 +1,5 @@
 [![GoDoc](https://godoc.org/github.com/lpar/gzipped?status.svg)](https://godoc.org/github.com/lpar/gzipped)
-
 [![Build Status](https://travis-ci.org/lpar/gzipped.svg?branch=trunk)](https://travis-ci.org/lpar/gzipped)
-
 [![codecov](https://codecov.io/gh/lpar/gzipped/branch/trunk/graph/badge.svg)](https://codecov.io/gh/lpar/gzipped)
 
 # gzipped.FileServer
