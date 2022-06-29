@@ -1,6 +1,7 @@
 package gzipped
 
 import (
+	fs2 "io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -35,4 +36,26 @@ func (d Dir) Exists(name string) bool {
 // Open defers to http.Dir's Open so that gzipped.Dir implements http.FileSystem.
 func (d Dir) Open(name string) (http.File, error) {
 	return http.Dir(d).Open(name)
+}
+
+func FS(f fs2.FS) FileSystem {
+	return fs{fs: f}
+}
+
+type fs struct {
+	fs fs2.FS
+}
+
+// Exists tests whether a file with the specified name exists, resolved relative to the file system.
+func (f fs) Exists(name string) bool {
+	if filepath.Separator != '/' && strings.ContainsRune(name, filepath.Separator) {
+		return false
+	}
+	_, err := fs2.Stat(f.fs, strings.TrimPrefix(filepath.FromSlash(path.Clean(name)), "/"))
+	return err == nil
+}
+
+// Open defers to http.FS's Open so that gzipped.fs implements http.FileSystem.
+func (f fs) Open(name string) (http.File, error) {
+	return http.FS(f.fs).Open(strings.TrimPrefix(name, "/"))
 }
