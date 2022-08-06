@@ -3,6 +3,8 @@ package gzipped
 import (
 	"bytes"
 	"compress/gzip"
+	"embed"
+	fs2 "io/fs"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -34,8 +36,8 @@ func TestPreference(t *testing.T) {
 	}
 }
 
-func testGet(t *testing.T, acceptGzip bool, urlPath string, expectedBody string) {
-	fs := FileServer(Dir("./testdata/"))
+func testGet(t *testing.T, f FileSystem, acceptGzip bool, urlPath string, expectedBody string) {
+	fs := FileServer(f)
 	rr := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlPath, nil)
 	if acceptGzip {
@@ -88,62 +90,113 @@ func testGet(t *testing.T, acceptGzip bool, urlPath string, expectedBody string)
 	}
 }
 
-func TestOpenStat(t *testing.T) {
-	fh := &fileHandler{Dir(".")}
-	_, _, err := fh.openAndStat(".")
-	if err == nil {
-		t.Errorf("openAndStat directory succeeded, should have failed")
+//go:embed testdata
+var testData embed.FS
+
+type TestCase struct {
+	name string
+	test func(t *testing.T)
+}
+
+func TestFileServer(t *testing.T) {
+	tests := func(f FileSystem) []TestCase {
+		return []TestCase{
+			{
+				name: "OpenStat",
+				test: func(t *testing.T) {
+					fh := &fileHandler{f}
+					_, _, err := fh.openAndStat(".")
+					if err == nil {
+						t.Errorf("openAndStat directory succeeded, should have failed")
+					}
+					_, _, err = fh.openAndStat("updog")
+					if err == nil {
+						t.Errorf("openAndStat nonexistent file succeeded, should have failed")
+					}
+				},
+			},
+			{
+
+				name: "NoBrowse",
+				test: func(t *testing.T) {
+					fs := FileServer(f)
+					rr := httptest.NewRecorder()
+					req, _ := http.NewRequest("GET", "/", nil)
+					fs.ServeHTTP(rr, req)
+					if rr.Code != 404 {
+						t.Errorf("Directory browse succeeded")
+					}
+				},
+			},
+			{
+
+				name: "LeadingSlash",
+				test: func(t *testing.T) {
+					fs := FileServer(f)
+					rr := httptest.NewRecorder()
+					req, _ := http.NewRequest("GET", "file.txt", nil)
+					fs.ServeHTTP(rr, req)
+					if rr.Code != 200 {
+						t.Errorf("Missing leading / on HTTP path caused error")
+					}
+				},
+			},
+			{
+
+				name: "404",
+				test: func(t *testing.T) {
+					fs := FileServer(f)
+					rr := httptest.NewRecorder()
+					req, _ := http.NewRequest("GET", "/nonexistent.txt", nil)
+					fs.ServeHTTP(rr, req)
+					if rr.Code != 404 {
+						t.Errorf("Directory browse succeeded")
+					}
+				},
+			},
+			{
+
+				name: "Get",
+				test: func(t *testing.T) {
+					testGet(t, f, false, "/file.txt", "zyxwvutsrqponmlkjihgfedcba\n")
+				},
+			},
+			{
+
+				name: "GzipGet",
+				test: func(t *testing.T) {
+					testGet(t, f, true, "/file.txt", "abcdefghijklmnopqrstuvwxyz\n")
+				},
+			},
+			{
+
+				name: "GetIdentity",
+				test: func(t *testing.T) {
+					testGet(t, f, false, "/file2.txt", "1234567890987654321\n")
+				},
+			},
+			{
+
+				name: "GzipGetIdentity",
+				test: func(t *testing.T) {
+					testGet(t, f, true, "/file2.txt", "1234567890987654321\n")
+				},
+			},
+		}
 	}
-	_, _, err = fh.openAndStat("updog")
-	if err == nil {
-		t.Errorf("openAndStat nonexistent file succeeded, should have failed")
+
+	sub, err := fs2.Sub(testData, "testdata")
+	if err != nil {
+		t.Fatal(err)
 	}
-}
 
-func TestNoBrowse(t *testing.T) {
-	fs := FileServer(Dir("./testdata/"))
-	rr := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/", nil)
-	fs.ServeHTTP(rr, req)
-	if rr.Code != 404 {
-		t.Errorf("Directory browse succeeded")
+	for name, fs := range map[string]FileSystem{"dir": Dir("./testdata/"), "fs": FS(sub)} {
+		t.Run(name, func(t *testing.T) {
+			for _, tt := range tests(fs) {
+				t.Run(tt.name, tt.test)
+			}
+		})
 	}
-}
-
-func TestLeadingSlash(t *testing.T) {
-	fs := FileServer(Dir("./testdata/"))
-	rr := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "file.txt", nil)
-	fs.ServeHTTP(rr, req)
-	if rr.Code != 200 {
-		t.Errorf("Missing leading / on HTTP path caused error")
-	}
-}
-
-func Test404(t *testing.T) {
-	fs := FileServer(Dir("./testdata/"))
-	rr := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/nonexistent.txt", nil)
-	fs.ServeHTTP(rr, req)
-	if rr.Code != 404 {
-		t.Errorf("Directory browse succeeded")
-	}
-}
-
-func TestGet(t *testing.T) {
-	testGet(t, false, "/file.txt", "zyxwvutsrqponmlkjihgfedcba\n")
-}
-
-func TestGzipGet(t *testing.T) {
-	testGet(t, true, "/file.txt", "abcdefghijklmnopqrstuvwxyz\n")
-}
-
-func TestGetIdentity(t *testing.T) {
-	testGet(t, false, "/file2.txt", "1234567890987654321\n")
-}
-
-func TestGzipGetIdentity(t *testing.T) {
-	testGet(t, true, "/file2.txt", "1234567890987654321\n")
 }
 
 func TestConstHeaders(t *testing.T) {
