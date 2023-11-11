@@ -2,6 +2,8 @@
 [![Build Status](https://travis-ci.org/lpar/gzipped.svg?branch=trunk)](https://travis-ci.org/lpar/gzipped)
 [![codecov](https://codecov.io/gh/lpar/gzipped/branch/trunk/graph/badge.svg)](https://codecov.io/gh/lpar/gzipped)
 
+**Note:** Moving to codeberg now that GitHub is going all-in on "AI". See https://codeberg.org/meta/gzipped 
+
 # gzipped.FileServer
 
 Drop-in replacement for golang http.FileServer which supports static content
