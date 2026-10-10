@@ -1,7 +1,6 @@
 package gzipped
 
 import (
-	"fmt"
 	fs2 "io/fs"
 	"net/http"
 	"os"

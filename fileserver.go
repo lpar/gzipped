@@ -59,18 +59,17 @@ func FileServer(root FileSystem) http.Handler {
 
 func (f *fileHandler) openAndStat(path string) (http.File, os.FileInfo, error) {
 	file, err := f.root.Open(path)
-	var info os.FileInfo
-	// This slightly weird variable reuse is so we can get 100% test coverage
-	// without having to come up with a test file that can be opened, yet
-	// fails to stat.
-	if err == nil {
-		info, err = file.Stat()
-	}
 	if err != nil {
-		return file, nil, err
+		return nil, nil, err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, nil, err
 	}
 	if info.IsDir() {
-		return file, nil, fmt.Errorf("%s is directory", path)
+		file.Close()
+		return nil, nil, fmt.Errorf("%s is directory", path)
 	}
 	return file, info, nil
 }

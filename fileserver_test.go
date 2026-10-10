@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"embed"
+	"errors"
 	fs2 "io/fs"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -211,5 +214,101 @@ func TestConstHeaders(t *testing.T) {
 		if header != canonical {
 			t.Errorf("%s != %s", header, canonical)
 		}
+	}
+}
+
+type trackedFileSystem struct {
+	FileSystem
+	statErrorFor string
+	files        []*trackedFile
+}
+
+func (f *trackedFileSystem) Open(name string) (http.File, error) {
+	file, err := f.FileSystem.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	tracked := &trackedFile{File: file}
+	if name == f.statErrorFor {
+		tracked.statErr = errors.New("stat failed")
+	}
+	f.files = append(f.files, tracked)
+	return tracked, nil
+}
+
+type trackedFile struct {
+	http.File
+	statErr error
+	closes  int
+}
+
+func (f *trackedFile) Stat() (os.FileInfo, error) {
+	if f.statErr != nil {
+		return nil, f.statErr
+	}
+	return f.File.Stat()
+}
+
+func (f *trackedFile) Close() error {
+	f.closes++
+	return f.File.Close()
+}
+
+func TestFileServerClosesFiles(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "directory"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("plain"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "file.txt.gz"), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct {
+		name         string
+		path         string
+		encoding     string
+		statErrorFor string
+		status       int
+		opened       int
+	}{
+		{"directory", "/directory", "", "", 404, 1},
+		{"directory_slash", "/directory/", "", "", 404, 1},
+		{"stat_error", "/file.txt", "", "/file.txt", 404, 1},
+		{"compressed_directory", "/file.txt", "gzip", "", 200, 2},
+		{"compressed_stat_error", "/file.txt", "gzip", "/file.txt.gz", 200, 2},
+		{"success", "/file.txt", "", "", 200, 1},
+		{"not_found", "/missing", "", "", 404, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := &trackedFileSystem{FileSystem: Dir(root), statErrorFor: tt.statErrorFor}
+			defer func() {
+				for _, file := range fs.files {
+					if file.closes == 0 {
+						file.File.Close()
+					}
+				}
+			}()
+			request := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			request.Header.Set("Accept-Encoding", tt.encoding)
+			response := httptest.NewRecorder()
+			FileServer(fs).ServeHTTP(response, request)
+			if response.Code != tt.status {
+				t.Errorf("status = %d, want %d", response.Code, tt.status)
+			}
+			if len(fs.files) != tt.opened {
+				t.Errorf("opened %d files, want %d", len(fs.files), tt.opened)
+			}
+			for i, file := range fs.files {
+				if file.closes != 1 {
+					t.Errorf("file %d closed %d times, want 1", i, file.closes)
+				}
+			}
+			if tt.status == 200 && response.Body.String() != "plain" {
+				t.Errorf("body = %q, want plain", response.Body.String())
+			}
+		})
 	}
 }
